@@ -15,8 +15,8 @@ header h1{flex:1;margin:0;font:700 1.6rem 'Playfair Display',serif;color:var(--i
 .search{display:flex;align-items:center;gap:8px;background:var(--card);border-radius:16px;padding:10px 14px;box-shadow:var(--sh);margin-bottom:12px}.search input{flex:1;border:0;background:none;font:inherit;font-size:1rem;color:var(--ink);outline:none}
 .bar{display:flex;align-items:center;justify-content:space-between;margin:4px 2px 10px;color:var(--mut);font-size:.88rem}
 .grid{columns:2;column-gap:12px}.grid.list{columns:1}@media(min-width:700px){.grid{columns:3}}
-.note{break-inside:avoid;background:var(--card);border-radius:18px;padding:14px;margin:0 0 12px;box-shadow:var(--sh);cursor:pointer;border:1px solid var(--line);display:block;width:100%;text-align:left}
-.note h3{margin:0 0 6px;font:700 1.02rem 'Playfair Display',serif;word-break:break-word}.note .pv{font-size:.86rem;color:var(--mut);max-height:9.5em;overflow:hidden;word-break:break-word;line-height:1.45}
+.note{-webkit-touch-callout:none;user-select:none;break-inside:avoid;background:var(--card);border-radius:18px;padding:14px;margin:0 0 12px;box-shadow:var(--sh);cursor:pointer;border:1px solid var(--line);display:block;width:100%;text-align:left}
+.note h3{margin:0 0 6px;font:700 1.02rem 'Playfair Display',serif;word-break:break-word}.note .pv{font-size:.86rem;color:var(--mut);opacity:.95;max-height:9.5em;overflow:hidden;word-break:break-word;line-height:1.45}
 .note .dt{font-size:.72rem;color:var(--mut);margin-top:8px}.note.pin{border-color:var(--acc)}
 .empty{text-align:center;color:var(--mut);padding:60px 20px}
 .fab{position:fixed;right:20px;bottom:calc(24px + env(safe-area-inset-bottom));width:62px;height:62px;border-radius:22px;background:var(--acc);color:#fff;box-shadow:0 8px 22px #c9566a55;display:flex;align-items:center;justify-content:center;z-index:6}.fab .ic{width:30px;height:30px}
@@ -58,7 +58,7 @@ header h1{flex:1;margin:0;font:700 1.6rem 'Playfair Display',serif;color:var(--i
 <div class="sheet" id="menu"><div class="panel"><h2>Menu<button class="ib" data-close><svg class="ic"><use href="#i-x"/></svg></button></h2>
 <div class="lbl">Appearance</div><div class="seg" id="theme"><button data-t="light">Light</button><button data-t="dark">Dark</button></div>
 <button class="mi" id="inst">Install App<small id="instMsg">Add Note Pad to your home screen</small></button>
-<button class="mi" id="upd">Check for Updates<small id="updMsg">Version np-v1</small></button>
+<button class="mi" id="upd">Check for Updates<small id="updMsg">Version np-v2</small></button>
 <button class="mi" id="bk">Backup Notes<small>Save a file with all your notes</small></button>
 <button class="mi" id="rs">Restore Notes<small>Bring notes back from a backup file</small></button><input type="file" id="file" accept=".json,application/json" hidden>
 <button class="mi" id="about">About</button></div></div>
@@ -80,10 +80,17 @@ let view=localStorage.getItem('np.view')||'grid',cur=null;
 function render(){const q=$('q').value.trim().toLowerCase();const L=notes.filter(n=>!q||(n.t+' '+strip(n.h)).toLowerCase().includes(q)).sort((a,b)=>(b.p|0)-(a.p|0)||b.u-a.u);
  $('grid').className='grid'+(view==='list'?' list':'');$('viewBtn').innerHTML=`<svg class="ic"><use href="#i-${view==='list'?'grid':'list'}"/></svg>`;
  $('count').textContent=notes.length+(notes.length===1?' note':' notes');
- $('grid').innerHTML=L.length?L.map(n=>`<button class="note${n.p?' pin':''}" data-id="${n.id}"><h3>${esc(n.t||'Untitled')}</h3><div class="pv">${esc(strip(n.h)).slice(0,280)||'<i>Empty note</i>'}</div><div class="dt">${n.p?'Pinned · ':''}${fmt(n.u)}</div></button>`).join(''):`<div class="empty">${q?'No notes match your search.':'No notes yet. Tap the plus button to write your first one.'}</div>`}
+ $('grid').innerHTML=L.length?L.map(n=>`<button class="note${n.p?' pin':''}" data-id="${n.id}"${cardSt(n)}><h3>${esc(n.t||'Untitled')}</h3><div class="pv">${esc(strip(n.h)).slice(0,280)||'<i>Empty note</i>'}</div><div class="dt">${n.p?'Pinned · ':''}${fmt(n.u)}</div></button>`).join(''):`<div class="empty">${q?'No notes match your search.':'No notes yet. Tap the plus button to write your first one.'}</div>`}
+const lum=h=>{const n=parseInt(h.slice(1),16);const f=v=>{v/=255;return v<=.03928?v/12.92:((v+.055)/1.055)**2.4};return .2126*f(n>>16)+.7152*f(n>>8&255)+.0722*f(n&255)};
+const cardSt=n=>{if(!n.bg)return '';const d=lum(n.bg)<.35;return ` style="background:${n.bg};border-color:${n.bg};color:${d?'#fff':'#2a1e24'};--mut:${d?'#ffffffbb':'#2a1e24aa'}"`};
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 $('q').oninput=render;$('viewBtn').onclick=()=>{view=view==='grid'?'list':'grid';localStorage.setItem('np.view',view);render()};
-$('grid').onclick=e=>{const b=e.target.closest('.note');if(b)openNote(b.dataset.id)};
+let lpT=null,lpFired=false,lpXY=null,cardTarget=null;
+$('grid').addEventListener('pointerdown',e=>{const b=e.target.closest('.note');if(!b)return;lpFired=false;lpXY=[e.clientX,e.clientY];clearTimeout(lpT);lpT=setTimeout(()=>{lpFired=true;cardTarget=notes.find(n=>n.id===b.dataset.id);if(navigator.vibrate)navigator.vibrate(15);openCol('n')},500)});
+['pointerup','pointercancel','pointerleave'].forEach(ev=>$('grid').addEventListener(ev,()=>clearTimeout(lpT)));
+$('grid').addEventListener('pointermove',e=>{if(lpXY&&Math.hypot(e.clientX-lpXY[0],e.clientY-lpXY[1])>10)clearTimeout(lpT)});
+$('grid').addEventListener('contextmenu',e=>{if(e.target.closest('.note'))e.preventDefault()});
+$('grid').onclick=e=>{const b=e.target.closest('.note');if(!b)return;if(lpFired){lpFired=false;e.preventDefault();return}openNote(b.dataset.id)};
 function openNote(id){cur=notes.find(n=>n.id===id);$('title').value=cur.t;$('body').innerHTML=cur.h;$('pinBtn').style.color=cur.p?'var(--acc)':'';$('ed').classList.add('on');$('saved').textContent='Edited '+fmt(cur.u)}
 $('newBtn').onclick=()=>{const n={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),t:'',h:'',c:Date.now(),u:Date.now()};notes.push(n);persist();openNote(n.id);setTimeout(()=>$('title').focus(),50)};
 let st;function save(){if(!cur)return;cur.t=$('title').value;cur.h=$('body').innerHTML;cur.u=Date.now();clearTimeout(st);st=setTimeout(()=>{persist();$('saved').textContent='Saved'},300);$('saved').textContent='Saving...'}
@@ -110,12 +117,12 @@ function drawW(){const R=260,img=wc.createImageData(520,520);for(let y=0;y<520;y
 function setPick(c){pick=c;$('cprev').style.background=c;$('chex').textContent=c.toUpperCase()}
 function wp(e){const r=W.getBoundingClientRect(),dx=(e.clientX-r.left)/r.width*2-1,dy=(e.clientY-r.top)/r.height*2-1;hv=[(Math.atan2(dy,dx)*180/Math.PI+360)%360,Math.min(1,Math.hypot(dx,dy))];setPick(hsv(hv[0],hv[1],bri));drawW()}
 W.onpointerdown=e=>{W.setPointerCapture(e.pointerId);wp(e)};W.onpointermove=e=>{if(e.buttons)wp(e)};$('bri').oninput=e=>{bri=e.target.value/100;setPick(hsv(hv[0],hv[1],bri));drawW()};
-const SW={t:['#3a2a33','#c9566a','#e07a3a','#d4a020','#3a9a6a','#2f7ab8','#7a4ab8','#ffffff'],h:['#ffe27a','#ffc4d0','#c9f0d8','#c8e0ff','#e6d4ff','#ffd8b0']};
-function openCol(m){cmode=m;$('colT').firstChild.textContent=m==='t'?'Text color':'Highlight color';$('sw').innerHTML=SW[m].map(c=>`<b style="background:${c}" data-c="${c}"></b>`).join('');setPick(m==='t'?(localStorage.getItem('np.tc')||'#c9566a'):(localStorage.getItem('np.hc')||'#ffe27a'));drawW();$('colS').classList.add('on')}
+const SW={t:['#3a2a33','#c9566a','#e07a3a','#d4a020','#3a9a6a','#2f7ab8','#7a4ab8','#ffffff'],n:['#fde2e4','#fff1c9','#dff3e4','#dbeafe','#ece2fb','#ffd8c2','#5a2a3a','#1f3a4a'],h:['#ffe27a','#ffc4d0','#c9f0d8','#c8e0ff','#e6d4ff','#ffd8b0']};
+function openCol(m){cmode=m;$('colT').firstChild.textContent=m==='t'?'Text color':m==='n'?'Note card color':'Highlight color';$('cnone').textContent=m==='n'?'Reset':'None';$('sw').innerHTML=SW[m].map(c=>`<b style="background:${c}" data-c="${c}"></b>`).join('');setPick(m==='n'?((cardTarget&&cardTarget.bg)||'#fde2e4'):m==='t'?(localStorage.getItem('np.tc')||'#c9566a'):(localStorage.getItem('np.hc')||'#ffe27a'));drawW();$('colS').classList.add('on')}
 $('sw').onclick=e=>{const b=e.target.closest('b');if(b)setPick(b.dataset.c)};
 $('tcol').onclick=()=>openCol('t');$('hcol').onclick=()=>openCol('h');
-$('capply').onclick=()=>{$('colS').classList.remove('on');if(cmode==='t'){ex('foreColor',pick);localStorage.setItem('np.tc',pick);$('tdot').style.background=pick}else{ex('hiliteColor',pick);localStorage.setItem('np.hc',pick);$('hdot').style.background=pick}};
-$('cnone').onclick=()=>{$('colS').classList.remove('on');if(cmode==='t')ex('foreColor',getComputedStyle(document.body).color);else ex('hiliteColor','transparent')};
+$('capply').onclick=()=>{$('colS').classList.remove('on');if(cmode==='n'){if(cardTarget){cardTarget.bg=pick;persist();render();toast('Card color saved')}return}if(cmode==='t'){ex('foreColor',pick);localStorage.setItem('np.tc',pick);$('tdot').style.background=pick}else{ex('hiliteColor',pick);localStorage.setItem('np.hc',pick);$('hdot').style.background=pick}};
+$('cnone').onclick=()=>{$('colS').classList.remove('on');if(cmode==='n'){if(cardTarget){delete cardTarget.bg;persist();render();toast('Card color reset')}return}if(cmode==='t')ex('foreColor',getComputedStyle(document.body).color);else ex('hiliteColor','transparent')};
 // sheets & menu
 document.querySelectorAll('.sheet').forEach(s=>s.onclick=e=>{if(e.target===s||e.target.closest('[data-close]'))s.classList.remove('on')});
 $('menuBtn').onclick=()=>$('menu').classList.add('on');$('about').onclick=()=>{$('menu').classList.remove('on');$('aboutS').classList.add('on')};
@@ -124,7 +131,7 @@ setT(document.documentElement.dataset.theme);$('theme').onclick=e=>{const b=e.ta
 let dp=null;addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e});addEventListener('appinstalled',()=>{localStorage.setItem('np.inst','1');$('instMsg').textContent='Installed. You are all set.'});
 $('inst').onclick=async()=>{const m=$('instMsg');if(matchMedia('(display-mode: standalone)').matches||navigator.standalone||(!dp&&localStorage.getItem('np.inst'))){m.textContent='Already installed on this phone.';return}
  if(dp){dp.prompt();const r=await dp.userChoice;dp=null;if(r.outcome==='accepted')localStorage.setItem('np.inst','1');return}m.textContent='In Chrome, tap the menu (three dots) then "Install app" or "Add to Home screen".'};
-const VER='np-v1';
+const VER='np-v2';
 async function doUpd(){const m=$('updMsg');m.textContent='Updating...';try{persist();const r=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();if(r){await r.update().catch(()=>{});if(r.waiting)r.waiting.postMessage('skip')}
  if(window.caches)for(const k of await caches.keys())await caches.delete(k);const t=await(await fetch('sw.js?v='+Date.now(),{cache:'no-store'})).text();const lv=(t.match(/const C='([^']+)'/)||[])[1];
  m.textContent=lv&&lv!==VER?'Updating to '+lv+'...':"You're on the latest version ("+VER+")";setTimeout(()=>location.reload(),1400)}catch(e){m.textContent='Could not check right now'}}
